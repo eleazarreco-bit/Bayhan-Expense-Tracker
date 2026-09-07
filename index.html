@@ -287,6 +287,7 @@
       </div>
       <div>
         <h1>Bayhan Wireless Expense Tracker</h1>
+        <p>Receipts, sorted and searchable — Bayhan &amp; Karla</p>
       </div>
     </div>
     <button class="add-btn" id="openAddBtn">
@@ -416,7 +417,7 @@
 <script>
 (function(){
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  let receipts = []; // metadata list
+  let receipts = []; // metadata + file data, kept in memory and mirrored to IndexedDB
   let pendingFile = null; // {dataUrl, name, type}
 
   const gridArea = document.getElementById('gridArea');
@@ -445,22 +446,70 @@
     return MONTHS[parseInt(m,10)-1] + ' ' + y;
   }
 
-  async function loadReceipts(){
-    try{
-      const res = await window.storage.get('receipts-meta', false);
-      receipts = res && res.value ? JSON.parse(res.value) : [];
-    }catch(e){
-      receipts = [];
-    }
-    render();
+  // ---------- IndexedDB persistence ----------
+  const DB_NAME = 'bayhanWirelessExpenseTracker';
+  const STORE_NAME = 'receipts';
+  let dbPromise = null;
+
+  function openDb(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      if(!('indexedDB' in window)){
+        reject(new Error('IndexedDB not supported in this browser.'));
+        return;
+      }
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e)=>{
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(STORE_NAME)){
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    return dbPromise;
   }
 
-  async function saveReceiptsList(){
+  async function dbGetAll(){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+
+  async function dbPut(record){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(record);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+
+  async function dbDelete(id){
+    const db = await openDb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(id);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+
+  async function loadReceipts(){
     try{
-      await window.storage.set('receipts-meta', JSON.stringify(receipts), false);
+      receipts = await dbGetAll();
     }catch(e){
-      showToast('Could not save — please try again.');
+      receipts = [];
+      showToast('Could not open local storage in this browser.');
     }
+    render();
   }
 
   function populateFilterOptions(){
@@ -534,7 +583,7 @@
     const badgeClass = r.market === 'Karla' ? 'karla' : 'bayhan';
     const thumb = r.hasFile
       ? (isImg
-          ? `<img class="lazy-thumb" data-id="${r.id}" alt="receipt">`
+          ? `<img src="${r.fileData||''}" alt="receipt">`
           : `<div class="filebadge"><span style="font-size:30px;">📄</span>PDF receipt</div>`)
       : `<div class="filebadge" style="color:var(--muted);"><span style="font-size:26px;">🧾</span>No file attached</div>`;
 
@@ -583,42 +632,29 @@
     gridArea.querySelectorAll('.download-btn').forEach(btn=>{
       btn.addEventListener('click', ()=> downloadReceipt(btn.dataset.id));
     });
-    gridArea.querySelectorAll('.lazy-thumb').forEach(img=>{
-      loadThumb(img.dataset.id, img);
-    });
-  }
-
-  async function loadThumb(id, imgEl){
-    try{
-      const res = await window.storage.get('receipt-file:' + id, false);
-      if(res && res.value) imgEl.src = res.value;
-    }catch(e){ /* leave blank on failure */ }
   }
 
   async function deleteReceipt(id){
     if(!confirm('Delete this receipt? This cannot be undone.')) return;
-    receipts = receipts.filter(r=>r.id !== id);
-    await saveReceiptsList();
-    try{ await window.storage.delete('receipt-file:' + id, false); }catch(e){}
-    render();
-    showToast('Receipt deleted.');
+    try{
+      await dbDelete(id);
+      receipts = receipts.filter(r=>r.id !== id);
+      render();
+      showToast('Receipt deleted.');
+    }catch(e){
+      showToast('Could not delete — please try again.');
+    }
   }
 
-  async function downloadReceipt(id){
+  function downloadReceipt(id){
     const r = receipts.find(x=>x.id===id);
-    if(!r) return;
-    try{
-      const res = await window.storage.get('receipt-file:' + id, false);
-      if(!res || !res.value){ showToast('File not found.'); return; }
-      const a = document.createElement('a');
-      a.href = res.value;
-      a.download = r.fileName || ('receipt-' + id);
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }catch(e){
-      showToast('Could not retrieve file.');
-    }
+    if(!r || !r.fileData){ showToast('File not found.'); return; }
+    const a = document.createElement('a');
+    a.href = r.fileData;
+    a.download = r.fileName || ('receipt-' + id);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   // ---------- Filters wiring ----------
@@ -674,8 +710,8 @@
   });
 
   function handleFile(file){
-    if(file.size > 4.5*1024*1024){
-      showToast('File too large — please use a file under 4.5MB.');
+    if(file.size > 15*1024*1024){
+      showToast('File too large — please use a file under 15MB.');
       return;
     }
     const reader = new FileReader();
@@ -714,26 +750,24 @@
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
 
-    const meta = {
+    const record = {
       id, date, market, store, expenseType,
       amount: Number(amount),
       hasFile: !!pendingFile,
       fileName: pendingFile ? pendingFile.name : '',
       fileType: pendingFile ? pendingFile.type : '',
+      fileData: pendingFile ? pendingFile.dataUrl : '',
       createdAt: new Date().toISOString()
     };
 
     try{
-      if(pendingFile){
-        await window.storage.set('receipt-file:' + id, pendingFile.dataUrl, false);
-      }
-      receipts.push(meta);
-      await saveReceiptsList();
+      await dbPut(record);
+      receipts.push(record);
       render();
       closeModal();
       showToast('Receipt saved.');
     }catch(e){
-      showToast('Something went wrong while saving.');
+      showToast('Something went wrong while saving — the file may be too large for this browser.');
     }finally{
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save receipt';

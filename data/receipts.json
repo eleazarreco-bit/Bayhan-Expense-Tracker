@@ -1,5 +1,18 @@
 [
   {
+    "id": "r17888242603599lheu",
+    "date": "2026-09-07",
+    "market": "Karla",
+    "store": "116: 13th",
+    "expenseType": "Supplies",
+    "amount": 117.13,
+    "hasFile": true,
+    "fileName": "$117.13 13th.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-07T23:37:40.359Z",
+    "storagePath": "receipts/r17888242603599lheu/$117.13 13th.jpeg"
+  },
+  {
     "id": "r17888242076227irrj",
     "date": "2026-09-07",
     "market": "Karla",

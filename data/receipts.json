@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "r1788823652437tb4wx",
+    "date": "2026-09-07",
+    "market": "Bayhan",
+    "store": "113",
+    "expenseType": "Utilities",
+    "amount": 123,
+    "hasFile": true,
+    "fileName": "Screenshot 2025-02-22 013954.png",
+    "fileType": "image/png",
+    "createdAt": "2026-09-07T23:27:32.437Z",
+    "storagePath": "receipts/r1788823652437tb4wx/Screenshot 2025-02-22 013954.png"
+  }
+]

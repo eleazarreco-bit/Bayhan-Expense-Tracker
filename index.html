@@ -308,6 +308,7 @@
       </div>
       <div>
         <h1>Bayhan Wireless Expense Tracker</h1>
+        <p>Receipts, sorted and searchable — Bayhan &amp; Karla</p>
       </div>
     </div>
     <div class="header-actions">
@@ -444,438 +445,428 @@
   </div>
 </div>
 
-<script>
-(function(){
-  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  let receipts = []; // metadata + file data, kept in memory and mirrored to IndexedDB
-  let pendingFile = null; // {dataUrl, name, type}
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import {
+  getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadString, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
+import {
+  getAuth, signInAnonymously, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 
-  const gridArea = document.getElementById('gridArea');
-  const statsRow = document.getElementById('statsRow');
-  const countPill = document.getElementById('countPill');
+// ============================================================
+// FIREBASE SETUP — replace the placeholder values below with
+// your own project's config from the Firebase console
+// (Project settings → General → Your apps → SDK setup and config).
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBZWQmuctvSes-jofGBiHZzuQBvms6ZnOs",
+  authDomain: "bayhan-wireless-expenses.firebaseapp.com",
+  projectId: "bayhan-wireless-expenses",
+  storageBucket: "bayhan-wireless-expenses.firebasestorage.app",
+  messagingSenderId: "51271945846",
+  appId: "1:51271945846:web:8601e4f59187a431f91957"
+};
 
-  function showToast(msg){
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(()=> t.remove(), 2600);
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+let receipts = []; // synced live from Firestore
+let pendingFile = null; // {dataUrl, name, type}
+let db, storage, auth;
+let isConfigured = !Object.values(FIREBASE_CONFIG).some(v => String(v).startsWith('REPLACE_WITH'));
+
+const gridArea = document.getElementById('gridArea');
+const statsRow = document.getElementById('statsRow');
+const countPill = document.getElementById('countPill');
+
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=> t.remove(), 2600);
+}
+
+function fmtMoney(n){
+  return '$' + Number(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function monthKey(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(key){
+  const [y,m] = key.split('-');
+  return MONTHS[parseInt(m,10)-1] + ' ' + y;
+}
+
+function showStorageBanner(message, isSetup){
+  const banner = document.getElementById('storageBanner');
+  const text = document.getElementById('storageBannerText');
+  text.innerHTML = `<strong>${isSetup ? 'One-time setup needed' : "Sync isn't working right now"}</strong>${message}`;
+  banner.classList.remove('hidden');
+}
+function hideStorageBanner(){
+  document.getElementById('storageBanner').classList.add('hidden');
+}
+
+// ---------- Firebase init + real-time sync ----------
+function initFirebase(){
+  if(!isConfigured){
+    showStorageBanner(
+      ' This app syncs receipts across devices using Firebase, but it hasn\'t been connected to a Firebase project yet. Open the page source / this file, find the FIREBASE_CONFIG object near the top of the script, and paste in your own project\'s config values from the Firebase console. Ask Claude for the step-by-step guide if you need it.',
+      true
+    );
+    gridArea.innerHTML = `<div class="loading-note">Waiting for Firebase configuration…</div>`;
+    return;
   }
+  try{
+    const app = initializeApp(FIREBASE_CONFIG);
+    db = getFirestore(app);
+    storage = getStorage(app);
+    auth = getAuth(app);
 
-  function fmtMoney(n){
-    return '$' + Number(n).toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
-  }
-
-  function monthKey(dateStr){
-    if(!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  }
-  function monthLabel(key){
-    const [y,m] = key.split('-');
-    return MONTHS[parseInt(m,10)-1] + ' ' + y;
-  }
-
-  // ---------- IndexedDB persistence ----------
-  const DB_NAME = 'bayhanWirelessExpenseTracker';
-  const STORE_NAME = 'receipts';
-  let dbPromise = null;
-
-  function openDb(){
-    if(dbPromise) return dbPromise;
-    dbPromise = new Promise((resolve, reject)=>{
-      if(!('indexedDB' in window)){
-        reject(new Error('IndexedDB not supported in this browser.'));
-        return;
+    onAuthStateChanged(auth, (user)=>{
+      if(user){
+        hideStorageBanner();
+        startListening();
       }
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = (e)=>{
-        const db = e.target.result;
-        if(!db.objectStoreNames.contains(STORE_NAME)){
-          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        }
-      };
-      req.onsuccess = ()=> resolve(req.result);
-      req.onerror = ()=> reject(req.error);
     });
-    return dbPromise;
-  }
-
-  async function dbGetAll(){
-    const db = await openDb();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
-      const req = store.getAll();
-      req.onsuccess = ()=> resolve(req.result || []);
-      req.onerror = ()=> reject(req.error);
-    });
-  }
-
-  async function dbPut(record){
-    const db = await openDb();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).put(record);
-      tx.oncomplete = ()=> resolve();
-      tx.onerror = ()=> reject(tx.error);
-    });
-  }
-
-  async function dbDelete(id){
-    const db = await openDb();
-    return new Promise((resolve, reject)=>{
-      const tx = db.transaction(STORE_NAME, 'readwrite');
-      tx.objectStore(STORE_NAME).delete(id);
-      tx.oncomplete = ()=> resolve();
-      tx.onerror = ()=> reject(tx.error);
-    });
-  }
-
-  function showStorageBanner(message){
-    const banner = document.getElementById('storageBanner');
-    const text = document.getElementById('storageBannerText');
-    text.innerHTML = `<strong>Local storage isn't working in this browser/tab.</strong>${message}`;
-    banner.classList.remove('hidden');
-  }
-  function hideStorageBanner(){
-    document.getElementById('storageBanner').classList.add('hidden');
-  }
-
-  async function loadReceipts(){
-    try{
-      receipts = await dbGetAll();
-      // Self-test: confirm writes actually persist (open succeeding isn't enough —
-      // private-browsing modes and some site-data settings allow open() but reject writes).
-      const testId = '__storage_test__';
-      await dbPut({ id: testId, __test: true });
-      const check = await dbGetAll();
-      const found = check.some(r => r.id === testId);
-      await dbDelete(testId);
-      if(!found){
-        throw new Error('Write succeeded but record could not be read back.');
-      }
-      hideStorageBanner();
-    }catch(e){
-      receipts = receipts && receipts.length ? receipts : [];
-      console.error('Storage self-test failed:', e);
+    signInAnonymously(auth).catch(err=>{
+      console.error('Auth failed:', err);
       showStorageBanner(
-        ' Receipts you add will disappear on refresh until this is fixed. This is usually caused by private/incognito browsing, "block all cookies" or "block site data" browser settings, or an ad/tracker blocker. Try: switching to normal (non-private) browsing, allowing site data for this domain, or a different browser. Technical detail: ' + (e && e.message ? e.message : String(e))
+        ' Could not sign in to Firebase. Make sure Anonymous authentication is enabled in your Firebase project (Authentication → Sign-in method → Anonymous). Technical detail: ' + err.message,
+        true
       );
-    }
+    });
+  }catch(e){
+    console.error('Firebase init failed:', e);
+    showStorageBanner(' Firebase failed to initialize. Double-check the values in FIREBASE_CONFIG match your project exactly. Technical detail: ' + e.message, true);
+  }
+}
+
+function startListening(){
+  const q = query(collection(db, 'receipts'), orderBy('createdAt', 'desc'));
+  onSnapshot(q, (snapshot)=>{
+    receipts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
-  }
+  }, (err)=>{
+    console.error('Sync error:', err);
+    showStorageBanner(
+      ' Live sync stopped working. This is usually a Firestore security rules issue — make sure your rules allow read/write when request.auth != null. Technical detail: ' + err.message
+    );
+  });
+}
 
-  function populateFilterOptions(){
-    const monthSel = document.getElementById('fMonth');
-    const typeSel = document.getElementById('fType');
-    const existingMonth = monthSel.value;
-    const existingType = typeSel.value;
+function populateFilterOptions(){
+  const monthSel = document.getElementById('fMonth');
+  const typeSel = document.getElementById('fType');
+  const existingMonth = monthSel.value;
+  const existingType = typeSel.value;
 
-    const months = Array.from(new Set(receipts.map(r=>monthKey(r.date)).filter(Boolean))).sort().reverse();
-    monthSel.innerHTML = '<option value="">All months</option>' + months.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
-    monthSel.value = months.includes(existingMonth) ? existingMonth : '';
+  const months = Array.from(new Set(receipts.map(r=>monthKey(r.date)).filter(Boolean))).sort().reverse();
+  monthSel.innerHTML = '<option value="">All months</option>' + months.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+  monthSel.value = months.includes(existingMonth) ? existingMonth : '';
 
-    const types = Array.from(new Set(receipts.map(r=>r.expenseType).filter(Boolean))).sort();
-    typeSel.innerHTML = '<option value="">All types</option>' + types.map(t=>`<option value="${t}">${t}</option>`).join('');
-    typeSel.value = types.includes(existingType) ? existingType : '';
-  }
+  const types = Array.from(new Set(receipts.map(r=>r.expenseType).filter(Boolean))).sort();
+  typeSel.innerHTML = '<option value="">All types</option>' + types.map(t=>`<option value="${t}">${t}</option>`).join('');
+  typeSel.value = types.includes(existingType) ? existingType : '';
+}
 
-  function getFiltered(){
-    const market = document.getElementById('fMarket').value;
-    const month = document.getElementById('fMonth').value;
-    const date = document.getElementById('fDate').value;
-    const type = document.getElementById('fType').value;
-    const min = document.getElementById('fMin').value;
-    const max = document.getElementById('fMax').value;
+function getFiltered(){
+  const market = document.getElementById('fMarket').value;
+  const month = document.getElementById('fMonth').value;
+  const date = document.getElementById('fDate').value;
+  const type = document.getElementById('fType').value;
+  const min = document.getElementById('fMin').value;
+  const max = document.getElementById('fMax').value;
 
-    return receipts.filter(r=>{
-      if(market && r.market !== market) return false;
-      if(month && monthKey(r.date) !== month) return false;
-      if(date && r.date !== date) return false;
-      if(type && r.expenseType !== type) return false;
-      if(min !== '' && Number(r.amount) < Number(min)) return false;
-      if(max !== '' && Number(r.amount) > Number(max)) return false;
-      return true;
-    }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
-  }
+  return receipts.filter(r=>{
+    if(market && r.market !== market) return false;
+    if(month && monthKey(r.date) !== month) return false;
+    if(date && r.date !== date) return false;
+    if(type && r.expenseType !== type) return false;
+    if(min !== '' && Number(r.amount) < Number(min)) return false;
+    if(max !== '' && Number(r.amount) > Number(max)) return false;
+    return true;
+  }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+}
 
-  function renderStats(){
-    const total = receipts.reduce((s,r)=>s+Number(r.amount||0),0);
-    const bayhan = receipts.filter(r=>r.market==='Bayhan').reduce((s,r)=>s+Number(r.amount||0),0);
-    const karla = receipts.filter(r=>r.market==='Karla').reduce((s,r)=>s+Number(r.amount||0),0);
-    const now = new Date();
-    const curKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-    const thisMonth = receipts.filter(r=>monthKey(r.date)===curKey).reduce((s,r)=>s+Number(r.amount||0),0);
+function renderStats(){
+  const total = receipts.reduce((s,r)=>s+Number(r.amount||0),0);
+  const bayhan = receipts.filter(r=>r.market==='Bayhan').reduce((s,r)=>s+Number(r.amount||0),0);
+  const karla = receipts.filter(r=>r.market==='Karla').reduce((s,r)=>s+Number(r.amount||0),0);
+  const now = new Date();
+  const curKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const thisMonth = receipts.filter(r=>monthKey(r.date)===curKey).reduce((s,r)=>s+Number(r.amount||0),0);
 
-    statsRow.innerHTML = `
-      <div class="stat-card navy">
-        <div class="stat-label">Total expenses</div>
-        <div class="stat-value">${fmtMoney(total)}</div>
-        <div class="stat-sub">${receipts.length} receipt${receipts.length===1?'':'s'}</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Bayhan</div>
-        <div class="stat-value">${fmtMoney(bayhan)}</div>
-        <div class="stat-sub">${receipts.filter(r=>r.market==='Bayhan').length} receipts</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-label">Karla</div>
-        <div class="stat-value">${fmtMoney(karla)}</div>
-        <div class="stat-sub">${receipts.filter(r=>r.market==='Karla').length} receipts</div>
-      </div>
-      <div class="stat-card yellow">
-        <div class="stat-label">This month</div>
-        <div class="stat-value">${fmtMoney(thisMonth)}</div>
-        <div class="stat-sub">${MONTHS[now.getMonth()]} ${now.getFullYear()}</div>
-      </div>
-    `;
-  }
+  statsRow.innerHTML = `
+    <div class="stat-card navy">
+      <div class="stat-label">Total expenses</div>
+      <div class="stat-value">${fmtMoney(total)}</div>
+      <div class="stat-sub">${receipts.length} receipt${receipts.length===1?'':'s'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Bayhan</div>
+      <div class="stat-value">${fmtMoney(bayhan)}</div>
+      <div class="stat-sub">${receipts.filter(r=>r.market==='Bayhan').length} receipts</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Karla</div>
+      <div class="stat-value">${fmtMoney(karla)}</div>
+      <div class="stat-sub">${receipts.filter(r=>r.market==='Karla').length} receipts</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">This month</div>
+      <div class="stat-value">${fmtMoney(thisMonth)}</div>
+      <div class="stat-sub">${MONTHS[now.getMonth()]} ${now.getFullYear()}</div>
+    </div>
+  `;
+}
 
-  function cardHtml(r){
-    const isImg = r.fileType && r.fileType.startsWith('image/');
-    const badgeClass = r.market === 'Karla' ? 'karla' : 'bayhan';
-    const thumb = r.hasFile
-      ? (isImg
-          ? `<img src="${r.fileData||''}" alt="receipt">`
-          : `<div class="filebadge"><span style="font-size:30px;">📄</span>PDF receipt</div>`)
-      : `<div class="filebadge" style="color:var(--muted);"><span style="font-size:26px;">🧾</span>No file attached</div>`;
+function cardHtml(r){
+  const isImg = r.fileType && r.fileType.startsWith('image/');
+  const badgeClass = r.market === 'Karla' ? 'karla' : 'bayhan';
+  const thumb = r.hasFile
+    ? (isImg
+        ? `<img src="${r.fileUrl||''}" alt="receipt">`
+        : `<div class="filebadge"><span style="font-size:30px;">📄</span>PDF receipt</div>`)
+    : `<div class="filebadge" style="color:var(--muted);"><span style="font-size:26px;">🧾</span>No file attached</div>`;
 
-    return `
-      <div class="card" data-id="${r.id}">
-        <div class="card-thumb">${thumb}</div>
-        <div class="card-body">
-          <div class="card-top">
-            <span class="badge ${badgeClass}">${r.market}</span>
-            <span class="card-date">${r.date || '—'}</span>
-          </div>
-          <div class="card-store">${escapeHtml(r.store)}</div>
-          <div class="card-type"><span>${escapeHtml(r.expenseType)}</span></div>
-          <div class="card-amount">${fmtMoney(r.amount)}</div>
-          <div class="card-actions">
-            ${r.hasFile ? `<button class="icon-btn download-btn" data-id="${r.id}">⬇ Download</button>` : `<span class="icon-btn" style="opacity:.4; cursor:default;">No file</span>`}
-            <button class="icon-btn danger delete-btn" data-id="${r.id}">🗑 Delete</button>
-          </div>
+  return `
+    <div class="card" data-id="${r.id}">
+      <div class="card-thumb">${thumb}</div>
+      <div class="card-body">
+        <div class="card-top">
+          <span class="badge ${badgeClass}">${r.market}</span>
+          <span class="card-date">${r.date || '—'}</span>
+        </div>
+        <div class="card-store">${escapeHtml(r.store)}</div>
+        <div class="card-type"><span>${escapeHtml(r.expenseType)}</span></div>
+        <div class="card-amount">${fmtMoney(r.amount)}</div>
+        <div class="card-actions">
+          ${r.hasFile ? `<a class="icon-btn download-btn" href="${r.fileUrl}" target="_blank" rel="noopener">⬇ Download</a>` : `<span class="icon-btn" style="opacity:.4; cursor:default;">No file</span>`}
+          <button class="icon-btn danger delete-btn" data-id="${r.id}">🗑 Delete</button>
         </div>
       </div>
-    `;
-  }
+    </div>
+  `;
+}
 
-  function escapeHtml(s){
-    return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
-  function render(){
-    populateFilterOptions();
-    renderStats();
-    const filtered = getFiltered();
-    countPill.textContent = `${filtered.length} of ${receipts.length} shown`;
-    if(filtered.length === 0){
-      gridArea.innerHTML = `
-        <div class="empty">
-          <h3>${receipts.length===0 ? 'No receipts yet' : 'No receipts match these filters'}</h3>
-          <p>${receipts.length===0 ? 'Add your first receipt to start tracking expenses.' : 'Try clearing a filter to see more results.'}</p>
-        </div>`;
-      return;
+function render(){
+  populateFilterOptions();
+  renderStats();
+  const filtered = getFiltered();
+  countPill.textContent = `${filtered.length} of ${receipts.length} shown`;
+  if(filtered.length === 0){
+    gridArea.innerHTML = `
+      <div class="empty">
+        <h3>${receipts.length===0 ? 'No receipts yet' : 'No receipts match these filters'}</h3>
+        <p>${receipts.length===0 ? 'Add your first receipt to start tracking expenses.' : 'Try clearing a filter to see more results.'}</p>
+      </div>`;
+    return;
+  }
+  gridArea.innerHTML = `<div class="grid">${filtered.map(cardHtml).join('')}</div>`;
+
+  gridArea.querySelectorAll('.delete-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> deleteReceipt(btn.dataset.id));
+  });
+}
+
+async function deleteReceipt(id){
+  if(!confirm('Delete this receipt? This cannot be undone.')) return;
+  const r = receipts.find(x=>x.id===id);
+  try{
+    await deleteDoc(doc(db, 'receipts', id));
+    if(r && r.hasFile && r.storagePath){
+      try{ await deleteObject(ref(storage, r.storagePath)); }catch(e){ /* file may already be gone */ }
     }
-    gridArea.innerHTML = `<div class="grid">${filtered.map(cardHtml).join('')}</div>`;
-
-    gridArea.querySelectorAll('.delete-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=> deleteReceipt(btn.dataset.id));
-    });
-    gridArea.querySelectorAll('.download-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=> downloadReceipt(btn.dataset.id));
-    });
+    showToast('Receipt deleted.');
+  }catch(e){
+    console.error('Delete failed:', e);
+    showToast('Could not delete — please try again.');
   }
+}
 
-  async function deleteReceipt(id){
-    if(!confirm('Delete this receipt? This cannot be undone.')) return;
-    try{
-      await dbDelete(id);
-      receipts = receipts.filter(r=>r.id !== id);
-      render();
-      showToast('Receipt deleted.');
-    }catch(e){
-      showToast('Could not delete — please try again.');
+// ---------- Filters wiring ----------
+['fMarket','fMonth','fDate','fType','fMin','fMax'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', render);
+  document.getElementById(id).addEventListener('change', render);
+});
+document.getElementById('clearFilters').addEventListener('click', ()=>{
+  ['fMarket','fMonth','fDate','fType','fMin','fMax'].forEach(id=> document.getElementById(id).value='');
+  render();
+});
+
+// ---------- Modal ----------
+const overlay = document.getElementById('overlay');
+function openModal(){
+  if(!isConfigured){
+    showToast('Connect Firebase first — see the banner above.');
+    return;
+  }
+  overlay.classList.remove('hidden');
+  document.getElementById('inDate').value = new Date().toISOString().slice(0,10);
+}
+function closeModal(){
+  overlay.classList.add('hidden');
+  ['inDate','inMarket','inStore','inAmount','inType'].forEach(id=> document.getElementById(id).value='');
+  pendingFile = null;
+  document.getElementById('dzDefault').classList.remove('hidden');
+  document.getElementById('dzPreview').classList.add('hidden');
+  document.getElementById('previewImg').classList.add('hidden');
+  document.getElementById('previewFileIcon').classList.add('hidden');
+  document.getElementById('fileInput').value = '';
+}
+document.getElementById('openAddBtn').addEventListener('click', openModal);
+document.getElementById('closeModal').addEventListener('click', closeModal);
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+
+// ---------- File upload ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', ()=> fileInput.click());
+dropzone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', (e)=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', ()=>{
+  if(fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+document.getElementById('removeFile').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  pendingFile = null;
+  document.getElementById('dzDefault').classList.remove('hidden');
+  document.getElementById('dzPreview').classList.add('hidden');
+  fileInput.value = '';
+});
+
+function handleFile(file){
+  if(file.size > 8*1024*1024){
+    showToast('File too large — please use a file under 8MB.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    pendingFile = { dataUrl: reader.result, name: file.name, type: file.type };
+    document.getElementById('dzDefault').classList.add('hidden');
+    document.getElementById('dzPreview').classList.remove('hidden');
+    document.getElementById('previewName').textContent = file.name;
+    if(file.type.startsWith('image/')){
+      document.getElementById('previewImg').src = reader.result;
+      document.getElementById('previewImg').classList.remove('hidden');
+      document.getElementById('previewFileIcon').classList.add('hidden');
+    } else {
+      document.getElementById('previewImg').classList.add('hidden');
+      document.getElementById('previewFileIcon').classList.remove('hidden');
     }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---------- Save receipt ----------
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const date = document.getElementById('inDate').value;
+  const market = document.getElementById('inMarket').value;
+  const store = document.getElementById('inStore').value.trim();
+  const amount = document.getElementById('inAmount').value;
+  const expenseType = document.getElementById('inType').value;
+
+  if(!date || !market || !store || !amount || !expenseType){
+    showToast('Please fill in all required fields.');
+    return;
   }
 
-  function downloadReceipt(id){
-    const r = receipts.find(x=>x.id===id);
-    if(!r || !r.fileData){ showToast('File not found.'); return; }
-    const a = document.createElement('a');
-    a.href = r.fileData;
-    a.download = r.fileName || ('receipt-' + id);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
+  const id = 'r' + Date.now() + Math.random().toString(36).slice(2,7);
+  const saveBtn = document.getElementById('saveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
 
-  // ---------- Filters wiring ----------
-  ['fMarket','fMonth','fDate','fType','fMin','fMax'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', render);
-    document.getElementById(id).addEventListener('change', render);
-  });
-  document.getElementById('clearFilters').addEventListener('click', ()=>{
-    ['fMarket','fMonth','fDate','fType','fMin','fMax'].forEach(id=> document.getElementById(id).value='');
-    render();
-  });
-
-  // ---------- Modal ----------
-  const overlay = document.getElementById('overlay');
-  function openModal(){
-    overlay.classList.remove('hidden');
-    document.getElementById('inDate').value = new Date().toISOString().slice(0,10);
-  }
-  function closeModal(){
-    overlay.classList.add('hidden');
-    ['inDate','inMarket','inStore','inAmount','inType'].forEach(id=> document.getElementById(id).value='');
-    pendingFile = null;
-    document.getElementById('dzDefault').classList.remove('hidden');
-    document.getElementById('dzPreview').classList.add('hidden');
-    document.getElementById('previewImg').classList.add('hidden');
-    document.getElementById('previewFileIcon').classList.add('hidden');
-    document.getElementById('fileInput').value = '';
-  }
-  document.getElementById('openAddBtn').addEventListener('click', openModal);
-  document.getElementById('closeModal').addEventListener('click', closeModal);
-  document.getElementById('cancelBtn').addEventListener('click', closeModal);
-  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
-
-  // ---------- File upload ----------
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
-  dropzone.addEventListener('click', ()=> fileInput.click());
-  dropzone.addEventListener('dragover', (e)=>{ e.preventDefault(); dropzone.classList.add('drag'); });
-  dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
-  dropzone.addEventListener('drop', (e)=>{
-    e.preventDefault(); dropzone.classList.remove('drag');
-    if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-  });
-  fileInput.addEventListener('change', ()=>{
-    if(fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
-  });
-  document.getElementById('removeFile').addEventListener('click', (e)=>{
-    e.stopPropagation();
-    pendingFile = null;
-    document.getElementById('dzDefault').classList.remove('hidden');
-    document.getElementById('dzPreview').classList.add('hidden');
-    fileInput.value = '';
-  });
-
-  function handleFile(file){
-    if(file.size > 15*1024*1024){
-      showToast('File too large — please use a file under 15MB.');
-      return;
+  try{
+    let fileUrl = '', storagePath = '';
+    if(pendingFile){
+      storagePath = `receipts/${id}/${pendingFile.name}`;
+      const fileRef = ref(storage, storagePath);
+      await uploadString(fileRef, pendingFile.dataUrl, 'data_url', {
+        contentDisposition: `attachment; filename="${pendingFile.name}"`
+      });
+      fileUrl = await getDownloadURL(fileRef);
     }
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      pendingFile = { dataUrl: reader.result, name: file.name, type: file.type };
-      document.getElementById('dzDefault').classList.add('hidden');
-      document.getElementById('dzPreview').classList.remove('hidden');
-      document.getElementById('previewName').textContent = file.name;
-      if(file.type.startsWith('image/')){
-        document.getElementById('previewImg').src = reader.result;
-        document.getElementById('previewImg').classList.remove('hidden');
-        document.getElementById('previewFileIcon').classList.add('hidden');
-      } else {
-        document.getElementById('previewImg').classList.add('hidden');
-        document.getElementById('previewFileIcon').classList.remove('hidden');
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // ---------- Save receipt ----------
-  document.getElementById('saveBtn').addEventListener('click', async ()=>{
-    const date = document.getElementById('inDate').value;
-    const market = document.getElementById('inMarket').value;
-    const store = document.getElementById('inStore').value.trim();
-    const amount = document.getElementById('inAmount').value;
-    const expenseType = document.getElementById('inType').value;
-
-    if(!date || !market || !store || !amount || !expenseType){
-      showToast('Please fill in all required fields.');
-      return;
-    }
-
-    const id = 'r' + Date.now() + Math.random().toString(36).slice(2,7);
-    const saveBtn = document.getElementById('saveBtn');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving…';
 
     const record = {
-      id, date, market, store, expenseType,
+      date, market, store, expenseType,
       amount: Number(amount),
       hasFile: !!pendingFile,
       fileName: pendingFile ? pendingFile.name : '',
       fileType: pendingFile ? pendingFile.type : '',
-      fileData: pendingFile ? pendingFile.dataUrl : '',
+      fileUrl, storagePath,
       createdAt: new Date().toISOString()
     };
 
-    try{
-      await dbPut(record);
-      receipts.push(record);
-      render();
-      closeModal();
-      showToast('Receipt saved.');
-    }catch(e){
-      console.error('Save failed:', e);
-      // Still show it for this session so the user isn't blocked, but warn it won't persist.
-      receipts.push(record);
-      render();
-      closeModal();
-      showStorageBanner(' Your last receipt is showing for this session only and was NOT saved to the browser. Export it to CSV now if you need to keep it. Technical detail: ' + (e && e.message ? e.message : String(e)));
-    }finally{
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save receipt';
-    }
+    await setDoc(doc(db, 'receipts', id), record);
+    closeModal();
+    showToast('Receipt saved and synced.');
+  }catch(e){
+    console.error('Save failed:', e);
+    showToast('Save failed — check your connection and Firebase setup. See console for details.');
+  }finally{
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save receipt';
+  }
+});
+
+// ---------- CSV export ----------
+function csvEscape(val){
+  const s = String(val ?? '');
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+
+function exportCsv(){
+  if(receipts.length === 0){
+    showToast('No receipts to export yet.');
+    return;
+  }
+  const rows = getFiltered();
+  const list = rows.length ? rows : receipts;
+  const header = ['Date','Market','Store Name','Expense Type','Amount','Receipt File Name'];
+  const lines = [header.join(',')];
+  list.forEach(r=>{
+    lines.push([
+      csvEscape(r.date),
+      csvEscape(r.market),
+      csvEscape(r.store),
+      csvEscape(r.expenseType),
+      csvEscape(Number(r.amount).toFixed(2)),
+      csvEscape(r.fileName || '')
+    ].join(','));
   });
+  const csvContent = lines.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `bayhan-wireless-expenses-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${list.length} receipt${list.length===1?'':'s'} to CSV.`);
+}
+document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
 
-  // ---------- CSV export ----------
-  function csvEscape(val){
-    const s = String(val ?? '');
-    if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
-    return s;
-  }
-
-  function exportCsv(){
-    if(receipts.length === 0){
-      showToast('No receipts to export yet.');
-      return;
-    }
-    const rows = getFiltered();
-    const list = rows.length ? rows : receipts;
-    const header = ['Date','Market','Store Name','Expense Type','Amount','Receipt File Name'];
-    const lines = [header.join(',')];
-    list.forEach(r=>{
-      lines.push([
-        csvEscape(r.date),
-        csvEscape(r.market),
-        csvEscape(r.store),
-        csvEscape(r.expenseType),
-        csvEscape(Number(r.amount).toFixed(2)),
-        csvEscape(r.fileName || '')
-      ].join(','));
-    });
-    const csvContent = lines.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0,10);
-    a.href = url;
-    a.download = `bayhan-wireless-expenses-${stamp}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast(`Exported ${list.length} receipt${list.length===1?'':'s'} to CSV.`);
-  }
-  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
-
-  loadReceipts();
-})();
+initFirebase();
 </script>
 </body>
 </html>

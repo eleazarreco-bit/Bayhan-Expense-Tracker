@@ -265,6 +265,27 @@
   }
   .required-star{ color:#D24C4C; }
   .loading-note{ font-size:12.5px; color:var(--muted); text-align:center; padding:20px; }
+  .banner{
+    max-width:1240px; margin:16px auto 0; padding:0 clamp(18px,4vw,48px);
+  }
+  .banner-inner{
+    background:#FFF3E0; border:1.5px solid #F0B95A; color:#7A4B00;
+    border-radius:12px; padding:14px 18px; font-size:13.5px; line-height:1.5;
+  }
+  .banner-inner strong{ display:block; margin-bottom:4px; }
+  .header-actions{ display:flex; gap:10px; align-items:center; }
+  .export-btn{
+    background:rgba(255,255,255,0.14);
+    color:#fff;
+    border:1.5px solid rgba(255,255,255,0.35);
+    padding:12px 18px;
+    border-radius:12px;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    display:flex; align-items:center; gap:8px;
+  }
+  .export-btn:hover{ background:rgba(255,255,255,0.24); }
 
   @media(max-width:760px){
     .stats{ grid-template-columns:repeat(2,1fr); }
@@ -289,11 +310,21 @@
         <h1>Bayhan Wireless Expense Tracker</h1>
       </div>
     </div>
-    <button class="add-btn" id="openAddBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#3A2600" stroke-width="2.5" stroke-linecap="round"/></svg>
-      Add receipt
-    </button>
+    <div class="header-actions">
+      <button class="export-btn" id="exportCsvBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Export CSV
+      </button>
+      <button class="add-btn" id="openAddBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#3A2600" stroke-width="2.5" stroke-linecap="round"/></svg>
+        Add receipt
+      </button>
+    </div>
   </div>
+</div>
+
+<div class="banner hidden" id="storageBanner">
+  <div class="banner-inner" id="storageBannerText"></div>
 </div>
 
 <div class="wrap">
@@ -501,12 +532,36 @@
     });
   }
 
+  function showStorageBanner(message){
+    const banner = document.getElementById('storageBanner');
+    const text = document.getElementById('storageBannerText');
+    text.innerHTML = `<strong>Local storage isn't working in this browser/tab.</strong>${message}`;
+    banner.classList.remove('hidden');
+  }
+  function hideStorageBanner(){
+    document.getElementById('storageBanner').classList.add('hidden');
+  }
+
   async function loadReceipts(){
     try{
       receipts = await dbGetAll();
+      // Self-test: confirm writes actually persist (open succeeding isn't enough —
+      // private-browsing modes and some site-data settings allow open() but reject writes).
+      const testId = '__storage_test__';
+      await dbPut({ id: testId, __test: true });
+      const check = await dbGetAll();
+      const found = check.some(r => r.id === testId);
+      await dbDelete(testId);
+      if(!found){
+        throw new Error('Write succeeded but record could not be read back.');
+      }
+      hideStorageBanner();
     }catch(e){
-      receipts = [];
-      showToast('Could not open local storage in this browser.');
+      receipts = receipts && receipts.length ? receipts : [];
+      console.error('Storage self-test failed:', e);
+      showStorageBanner(
+        ' Receipts you add will disappear on refresh until this is fixed. This is usually caused by private/incognito browsing, "block all cookies" or "block site data" browser settings, or an ad/tracker blocker. Try: switching to normal (non-private) browsing, allowing site data for this domain, or a different browser. Technical detail: ' + (e && e.message ? e.message : String(e))
+      );
     }
     render();
   }
@@ -766,12 +821,58 @@
       closeModal();
       showToast('Receipt saved.');
     }catch(e){
-      showToast('Something went wrong while saving — the file may be too large for this browser.');
+      console.error('Save failed:', e);
+      // Still show it for this session so the user isn't blocked, but warn it won't persist.
+      receipts.push(record);
+      render();
+      closeModal();
+      showStorageBanner(' Your last receipt is showing for this session only and was NOT saved to the browser. Export it to CSV now if you need to keep it. Technical detail: ' + (e && e.message ? e.message : String(e)));
     }finally{
       saveBtn.disabled = false;
       saveBtn.textContent = 'Save receipt';
     }
   });
+
+  // ---------- CSV export ----------
+  function csvEscape(val){
+    const s = String(val ?? '');
+    if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  }
+
+  function exportCsv(){
+    if(receipts.length === 0){
+      showToast('No receipts to export yet.');
+      return;
+    }
+    const rows = getFiltered();
+    const list = rows.length ? rows : receipts;
+    const header = ['Date','Market','Store Name','Expense Type','Amount','Receipt File Name'];
+    const lines = [header.join(',')];
+    list.forEach(r=>{
+      lines.push([
+        csvEscape(r.date),
+        csvEscape(r.market),
+        csvEscape(r.store),
+        csvEscape(r.expenseType),
+        csvEscape(Number(r.amount).toFixed(2)),
+        csvEscape(r.fileName || '')
+      ].join(','));
+    });
+    const csvContent = lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `bayhan-wireless-expenses-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${list.length} receipt${list.length===1?'':'s'} to CSV.`);
+  }
+  document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
 
   loadReceipts();
 })();

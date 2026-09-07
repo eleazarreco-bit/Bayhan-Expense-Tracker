@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "r17888242076227irrj",
+    "date": "2026-09-07",
+    "market": "Karla",
+    "store": "118: Milpitas",
+    "expenseType": "Supplies",
+    "amount": 104.55,
+    "hasFile": true,
+    "fileName": "$104.55 Milpitas.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-07T23:36:47.622Z",
+    "storagePath": "receipts/r17888242076227irrj/$104.55 Milpitas.jpeg"
+  }
+]

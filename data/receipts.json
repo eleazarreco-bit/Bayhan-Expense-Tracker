@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790713947164vy3dd",
+    "date": "2026-09-09",
+    "market": "Karla",
+    "store": "117 : 73rd",
+    "expenseType": "Supplies",
+    "amount": 130.2,
+    "hasFile": true,
+    "fileName": "Store phone and vacum for 73rd.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-29T20:32:27.164Z",
+    "storagePath": "receipts/r1790713947164vy3dd/Store phone and vacum for 73rd.jpeg"
+  },
+  {
     "id": "r1790713859277mhup2",
     "date": "2026-09-09",
     "market": "Karla",

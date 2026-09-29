@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790713859277mhup2",
+    "date": "2026-09-09",
+    "market": "Karla",
+    "store": "Story & 13th",
+    "expenseType": "Supplies",
+    "amount": 149.26,
+    "hasFile": true,
+    "fileName": "supplies for story and store phone for 13th.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-29T20:30:59.277Z",
+    "storagePath": "receipts/r1790713859277mhup2/supplies for story and store phone for 13th.jpeg"
+  },
+  {
     "id": "r17888242603599lheu",
     "date": "2026-09-07",
     "market": "Karla",

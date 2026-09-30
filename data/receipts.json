@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799641205l64zh",
+    "date": "2026-09-17",
+    "market": "Karla",
+    "store": "114 & 116 Story & 13th",
+    "expenseType": "Marketing",
+    "amount": 65.93,
+    "hasFile": true,
+    "fileName": "$65.93 120 each business cards for story and 13th.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:20:41.205Z",
+    "storagePath": "receipts/r1790799641205l64zh/$65.93 120 each business cards for story and 13th.jpeg"
+  },
+  {
     "id": "r1790799553525udpwn",
     "date": "2026-09-16",
     "market": "Karla",

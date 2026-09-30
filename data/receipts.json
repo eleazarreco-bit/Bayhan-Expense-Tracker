@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799690445zn866",
+    "date": "2026-09-17",
+    "market": "Karla",
+    "store": "116 : 13th",
+    "expenseType": "Marketing",
+    "amount": 71.49,
+    "hasFile": true,
+    "fileName": "Flyers for 13th.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:21:30.445Z",
+    "storagePath": "receipts/r1790799690445zn866/Flyers for 13th.jpeg"
+  },
+  {
     "id": "r1790799641205l64zh",
     "date": "2026-09-17",
     "market": "Karla",

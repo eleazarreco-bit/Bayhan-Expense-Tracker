@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799777525k0zek",
+    "date": "2026-09-17",
+    "market": "Karla",
+    "store": "118 : Milpitas",
+    "expenseType": "Marketing",
+    "amount": 32.59,
+    "hasFile": true,
+    "fileName": "Business cards for milpitas.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:22:57.525Z",
+    "storagePath": "receipts/r1790799777525k0zek/Business cards for milpitas.jpeg"
+  },
+  {
     "id": "r179079972260571jpi",
     "date": "2026-09-17",
     "market": "Karla",

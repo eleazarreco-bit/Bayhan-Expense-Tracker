@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799405477if0gk",
+    "date": "2026-09-09",
+    "market": "Karla",
+    "store": "118: Milpitas",
+    "expenseType": "Other",
+    "amount": 384.9,
+    "hasFile": true,
+    "fileName": "Milpitas comcast $384.90 Autopay.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:16:45.477Z",
+    "storagePath": "receipts/r1790799405477if0gk/Milpitas comcast $384.90 Autopay.jpeg"
+  },
+  {
     "id": "r17907993547971lyz5",
     "date": "2026-09-09",
     "market": "Karla",

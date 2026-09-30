@@ -1,5 +1,18 @@
 [
   {
+    "id": "r17907999446379lfs3",
+    "date": "2026-09-22",
+    "market": "Karla",
+    "store": "116 & 119",
+    "expenseType": "Supplies",
+    "amount": 63.33,
+    "hasFile": true,
+    "fileName": "ballon stands for 13th and store phone for santa clara.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:25:44.637Z",
+    "storagePath": "receipts/r17907999446379lfs3/ballon stands for 13th and store phone for santa clara.jpeg"
+  },
+  {
     "id": "r1790799861893x69vm",
     "date": "2026-09-21",
     "market": "Karla",

@@ -1,5 +1,18 @@
 [
   {
+    "id": "r17908003007894nl7m",
+    "date": "2026-09-29",
+    "market": "Karla",
+    "store": "119 : Downtown",
+    "expenseType": "Marketing",
+    "amount": 40.68,
+    "hasFile": true,
+    "fileName": "Baloons for santa clara.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:31:40.789Z",
+    "storagePath": "receipts/r17908003007894nl7m/Baloons for santa clara.jpeg"
+  },
+  {
     "id": "r17908002164295y4ov",
     "date": "2026-09-24",
     "market": "Karla",

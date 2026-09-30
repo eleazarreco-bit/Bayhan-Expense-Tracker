@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799861893x69vm",
+    "date": "2026-09-21",
+    "market": "Karla",
+    "store": "119 : Downtown",
+    "expenseType": "Supplies",
+    "amount": 87.98,
+    "hasFile": true,
+    "fileName": "Vacum and supplies for santa clara.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:24:21.893Z",
+    "storagePath": "receipts/r1790799861893x69vm/Vacum and supplies for santa clara.jpeg"
+  },
+  {
     "id": "r1790799777525k0zek",
     "date": "2026-09-17",
     "market": "Karla",

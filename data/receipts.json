@@ -1,5 +1,18 @@
 [
   {
+    "id": "r17908002164295y4ov",
+    "date": "2026-09-24",
+    "market": "Karla",
+    "store": "114 : Story",
+    "expenseType": "Supplies",
+    "amount": 37.64,
+    "hasFile": true,
+    "fileName": "supplies for story.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:30:16.430Z",
+    "storagePath": "receipts/r17908002164295y4ov/supplies for story.jpeg"
+  },
+  {
     "id": "r1790800176181q2plh",
     "date": "2026-09-23",
     "market": "Karla",

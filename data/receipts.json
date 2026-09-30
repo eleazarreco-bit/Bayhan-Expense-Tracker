@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1790799553525udpwn",
+    "date": "2026-09-16",
+    "market": "Karla",
+    "store": "114 & 116 Story & 13th",
+    "expenseType": "Maintenance & Repairs",
+    "amount": 79.18,
+    "hasFile": true,
+    "fileName": "for story and 13th.jpeg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-09-30T20:19:13.525Z",
+    "storagePath": "receipts/r1790799553525udpwn/for story and 13th.jpeg"
+  },
+  {
     "id": "r1790799449580ia2bb",
     "date": "2026-09-09",
     "market": "Karla",

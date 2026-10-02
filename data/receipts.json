@@ -26,19 +26,6 @@
     "storagePath": "receipts/r1790909329990tzy4f/IMG-20261002-WA0019.jpg"
   },
   {
-    "id": "r17909092596432zric",
-    "date": "2026-09-03",
-    "market": "Bayhan",
-    "store": "108",
-    "expenseType": "Marketing",
-    "amount": 221.49,
-    "hasFile": true,
-    "fileName": "IMG-20261002-WA0018.jpg",
-    "fileType": "image/jpeg",
-    "createdAt": "2026-10-02T02:47:39.643Z",
-    "storagePath": "receipts/r17909092596432zric/IMG-20261002-WA0018.jpg"
-  },
-  {
     "id": "r1790909213147opoch",
     "date": "2026-09-03",
     "market": "Bayhan",

@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791343174198qyg9y",
+    "date": "2026-10-03",
+    "market": "Karla",
+    "store": "Downtown",
+    "expenseType": "Supplies",
+    "amount": 88.28,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0173.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T03:19:34.198Z",
+    "storagePath": "receipts/r1791343174198qyg9y/IMG-20261007-WA0173.jpg"
+  },
+  {
     "id": "r1791343080157cv9up",
     "date": "2026-10-06",
     "market": "Bayhan",

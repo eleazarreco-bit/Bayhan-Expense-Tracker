@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791343220838810lw",
+    "date": "2026-10-03",
+    "market": "Karla",
+    "store": "Downtown",
+    "expenseType": "Marketing",
+    "amount": 43.95,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0177.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T03:20:20.838Z",
+    "storagePath": "receipts/r1791343220838810lw/IMG-20261007-WA0177.jpg"
+  },
+  {
     "id": "r1791343174198qyg9y",
     "date": "2026-10-03",
     "market": "Karla",

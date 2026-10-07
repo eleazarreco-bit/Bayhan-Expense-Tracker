@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791341573594l1o2d",
+    "date": "2026-09-06",
+    "market": "Bayhan",
+    "store": "109",
+    "expenseType": "Transportation",
+    "amount": 5.54,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0067.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T02:52:53.594Z",
+    "storagePath": "receipts/r1791341573594l1o2d/IMG-20261007-WA0067.jpg"
+  },
+  {
     "id": "r1791341538809kmj6x",
     "date": "2026-09-06",
     "market": "Bayhan",

@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791343328649r0hni",
+    "date": "2026-10-05",
+    "market": "Karla",
+    "store": "Story",
+    "expenseType": "Marketing",
+    "amount": 272.15,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0183.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T03:22:08.650Z",
+    "storagePath": "receipts/r1791343328649r0hni/IMG-20261007-WA0183.jpg"
+  },
+  {
     "id": "r1791343281970v92ux",
     "date": "2026-10-05",
     "market": "Karla",

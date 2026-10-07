@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791343022399yzidq",
+    "date": "2026-10-04",
+    "market": "Bayhan",
+    "store": "113",
+    "expenseType": "Maintenance & Repairs",
+    "amount": 97.77,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0172.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T03:17:02.399Z",
+    "storagePath": "receipts/r1791343022399yzidq/IMG-20261007-WA0172.jpg"
+  },
+  {
     "id": "r17913429763377qy4t",
     "date": "2026-10-04",
     "market": "Bayhan",

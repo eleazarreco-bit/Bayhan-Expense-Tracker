@@ -1,5 +1,18 @@
 [
   {
+    "id": "r1791342815937uwyp9",
+    "date": "2026-10-01",
+    "market": "Bayhan",
+    "store": "106",
+    "expenseType": "Supplies",
+    "amount": 21.91,
+    "hasFile": true,
+    "fileName": "IMG-20261007-WA0157.jpg",
+    "fileType": "image/jpeg",
+    "createdAt": "2026-10-07T03:13:35.938Z",
+    "storagePath": "receipts/r1791342815937uwyp9/IMG-20261007-WA0157.jpg"
+  },
+  {
     "id": "r17913427359044rjfv",
     "date": "2026-10-01",
     "market": "Bayhan",

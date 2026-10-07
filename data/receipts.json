@@ -1,5 +1,17 @@
 [
   {
+    "id": "r1791343080157cv9up",
+    "date": "2026-10-06",
+    "market": "Bayhan",
+    "store": "103",
+    "expenseType": "Other",
+    "amount": 40,
+    "hasFile": false,
+    "fileName": "",
+    "fileType": "",
+    "createdAt": "2026-10-07T03:18:00.157Z"
+  },
+  {
     "id": "r1791343022399yzidq",
     "date": "2026-10-04",
     "market": "Bayhan",
